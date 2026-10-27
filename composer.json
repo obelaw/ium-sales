@@ -8,12 +8,6 @@
             "email": "consulting@obelaw.com"
         }
     ],
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../../../ium/packages/ium"
-        }
-    ],
     "require": {
         "php": "^8.2",
         "obelaw/ium": "*",
