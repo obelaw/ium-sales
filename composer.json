@@ -1,0 +1,57 @@
+{
+    "name": "obelaw/ium-sales",
+    "description": "Sales & Order Management System (OMS) Domain Module for Obelawium ERP",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Obelaw Team",
+            "email": "consulting@obelaw.com"
+        }
+    ],
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../../../ium/packages/ium"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "obelaw/ium": "*",
+        "illuminate/database": "^11.0|^12.0|^13.0",
+        "illuminate/support": "^11.0|^12.0|^13.0",
+        "illuminate/validation": "^11.0|^12.0|^13.0",
+        "illuminate/events": "^11.0|^12.0|^13.0"
+    },
+    "require-dev": {
+        "pestphp/pest": "^3.0|^4.0",
+        "pestphp/pest-plugin-laravel": "^3.0|^4.0",
+        "orchestra/testbench": "^9.0|^10.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Obelaw\\Ium\\Sales\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Obelaw\\Ium\\Sales\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Obelaw\\Ium\\Sales\\Providers\\ObelawSalesServiceProvider"
+            ]
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest"
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
