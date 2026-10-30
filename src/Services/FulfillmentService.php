@@ -43,6 +43,9 @@ final class FulfillmentService
         }
 
         return DB::transaction(function () use ($order, $defaultSourcingNode, $availableAtp): SalesOrder {
+            // Pessimistic lock on parent order to prevent race conditions during concurrent allocations
+            SalesOrder::where('id', $order->id)->lockForUpdate()->first();
+
             // Check ATP if available stock array is provided
             if ($availableAtp !== null) {
                 foreach ($order->lines as $line) {
