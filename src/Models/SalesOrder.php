@@ -130,4 +130,44 @@ class SalesOrder extends ModelBase
     {
         return $this->hasMany(ReturnMerchandiseAuthorization::class, 'sales_order_id');
     }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(SalesOrderPayment::class, 'sales_order_id')->orderBy('paid_at', 'desc');
+    }
+
+    public function totalPaid(): float
+    {
+        return (float) $this->payments()->where('status', 'completed')->sum('amount');
+    }
+
+    public function totalPaidMinor(): int
+    {
+        return (int) $this->payments()->where('status', 'completed')->sum('amount_minor');
+    }
+
+    public function getGrandTotalMinorAttribute(): int
+    {
+        return (int) round(((float) $this->grand_total) * 100);
+    }
+
+    public function getSubtotalMinorAttribute(): int
+    {
+        return (int) round(((float) $this->subtotal) * 100);
+    }
+
+    public function getDiscountTotalMinorAttribute(): int
+    {
+        return (int) round(((float) $this->discount_total) * 100);
+    }
+
+    public function getTaxTotalMinorAttribute(): int
+    {
+        return (int) round(((float) $this->tax_total) * 100);
+    }
+
+    public function getShippingTotalMinorAttribute(): int
+    {
+        return (int) round(((float) $this->shipping_total) * 100);
+    }
 }

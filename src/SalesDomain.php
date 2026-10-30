@@ -11,6 +11,7 @@ use Obelaw\Ium\Sales\Services\AuditService;
 use Obelaw\Ium\Sales\Services\ChannelService;
 use Obelaw\Ium\Sales\Services\FulfillmentService;
 use Obelaw\Ium\Sales\Services\OrderService;
+use Obelaw\Ium\Sales\Services\PaymentService;
 use Obelaw\Ium\Sales\Services\PricingEngineService;
 use Obelaw\Ium\Sales\Services\QuotationService;
 use Obelaw\Ium\Sales\Services\RmaService;
@@ -80,6 +81,14 @@ final class SalesDomain extends Domain
     public function pricing(): PricingEngineService
     {
         return $this->getManager()->pricing();
+    }
+
+    /**
+     * Commercial invoicing and customer payment collection service.
+     */
+    public function payments(): PaymentService
+    {
+        return $this->getManager()->payments();
     }
 
     /**

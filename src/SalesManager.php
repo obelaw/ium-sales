@@ -9,6 +9,7 @@ use Obelaw\Ium\Sales\Services\AuditService;
 use Obelaw\Ium\Sales\Services\ChannelService;
 use Obelaw\Ium\Sales\Services\FulfillmentService;
 use Obelaw\Ium\Sales\Services\OrderService;
+use Obelaw\Ium\Sales\Services\PaymentService;
 use Obelaw\Ium\Sales\Services\PricingEngineService;
 use Obelaw\Ium\Sales\Services\QuotationService;
 use Obelaw\Ium\Sales\Services\RmaService;
@@ -46,6 +47,11 @@ final class SalesManager
     public function pricing(): PricingEngineService
     {
         return app(PricingEngineService::class);
+    }
+
+    public function payments(): PaymentService
+    {
+        return app(PaymentService::class);
     }
 
     public function audit(): AuditService

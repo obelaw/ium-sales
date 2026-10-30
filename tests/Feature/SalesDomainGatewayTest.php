@@ -20,6 +20,7 @@ it('resolves all domain services from sales domain gateway', function () {
     expect($sales->rmas())->toBeInstanceOf(\Obelaw\Ium\Sales\Services\RmaService::class);
     expect($sales->channels())->toBeInstanceOf(\Obelaw\Ium\Sales\Services\ChannelService::class);
     expect($sales->pricing())->toBeInstanceOf(\Obelaw\Ium\Sales\Services\PricingEngineService::class);
+    expect($sales->payments())->toBeInstanceOf(\Obelaw\Ium\Sales\Services\PaymentService::class);
     expect($sales->audit())->toBeInstanceOf(\Obelaw\Ium\Sales\Services\AuditService::class);
     expect($sales->acl())->toBeInstanceOf(\Obelaw\Ium\Sales\Services\AclService::class);
 });

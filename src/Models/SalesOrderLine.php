@@ -126,4 +126,24 @@ class SalesOrderLine extends ModelBase
     {
         return max(0.0, (float) $this->shipped_quantity - (float) $this->returned_quantity);
     }
+
+    public function getTotalAmountMinorAttribute(): int
+    {
+        return (int) round(((float) $this->total_amount) * 100);
+    }
+
+    public function getUnitPriceMinorAttribute(): int
+    {
+        return (int) round(((float) $this->unit_price) * 100);
+    }
+
+    public function getDiscountAmountMinorAttribute(): int
+    {
+        return (int) round(((float) $this->discount_amount) * 100);
+    }
+
+    public function getTaxAmountMinorAttribute(): int
+    {
+        return (int) round(((float) $this->tax_amount) * 100);
+    }
 }
