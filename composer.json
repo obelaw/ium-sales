@@ -21,6 +21,9 @@
         "pestphp/pest-plugin-laravel": "^3.0|^4.0",
         "orchestra/testbench": "^9.0|^10.0"
     },
+    "suggest": {
+        "obelaw/ium-accounting": "Enables automatic General Ledger double-entry postings for confirmed orders, customer payments, and returns."
+    },
     "autoload": {
         "psr-4": {
             "Obelaw\\Ium\\Sales\\": "src/"
@@ -28,7 +31,8 @@
     },
     "autoload-dev": {
         "psr-4": {
-            "Obelaw\\Ium\\Sales\\Tests\\": "tests/"
+            "Obelaw\\Ium\\Sales\\Tests\\": "tests/",
+            "Obelaw\\Ium\\Accounting\\": "../../accounting/ium-accounting/src/"
         }
     },
     "extra": {

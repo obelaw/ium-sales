@@ -10,6 +10,7 @@ use Obelaw\Ium\Sales\Data\ReceiveRmaGoodsDto;
 use Obelaw\Ium\Sales\Enums\RmaDisposition;
 use Obelaw\Ium\Sales\Enums\RmaStatus;
 use Obelaw\Ium\Sales\Events\ReturnAuthorized;
+use Obelaw\Ium\Sales\Events\RmaCreditApproved;
 use Obelaw\Ium\Sales\Exceptions\InvalidOrderStateTransitionException;
 use Obelaw\Ium\Sales\Exceptions\InvalidRmaQuantityException;
 use Obelaw\Ium\Sales\Models\ReturnMerchandiseAuthorization;
@@ -195,6 +196,9 @@ final class RmaService
                 action: 'rma_approved_for_credit',
                 after: ['status' => RmaStatus::ApprovedForCredit->value]
             );
+
+            $totalRefund = (float) $rma->lines->sum('refund_amount');
+            event(new RmaCreditApproved($rma, $totalRefund));
 
             return $rma;
         });

@@ -32,4 +32,25 @@ return [
 
     // Default return policy window in days for RMA validation
     'rma_window_days' => env('IUM_SALES_RMA_WINDOW_DAYS', 30),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Optional Accounting (FMS) Integration Configuration
+    |--------------------------------------------------------------------------
+    */
+    'accounting' => [
+        // Mode: 'auto' (detects if ium()->hasDomain('accounting')), true, or false
+        'enabled' => env('IUM_SALES_ACCOUNTING_ENABLED', 'auto'),
+        'auto_post' => env('IUM_SALES_ACCOUNTING_AUTO_POST', true),
+        'accounts' => [
+            'receivables' => env('IUM_SALES_ACC_RECEIVABLES', '1100'),
+            'revenue'     => env('IUM_SALES_ACC_REVENUE', '4000'),
+            'tax_payable' => env('IUM_SALES_ACC_TAX', '2200'),
+            'shipping'    => env('IUM_SALES_ACC_SHIPPING', '4100'),
+            'bank'        => env('IUM_SALES_ACC_BANK', '1010'),
+            'cogs'        => env('IUM_SALES_ACC_COGS', '5000'),
+            'inventory'   => env('IUM_SALES_ACC_INVENTORY', '1200'),
+            'returns'     => env('IUM_SALES_ACC_RETURNS', '4200'),
+        ],
+    ],
 ];
