@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0",
+  "skills": {
+    "onsynk/gitsynk": {
+      "version": "1.0.0",
+      "description": "Universal, language-agnostic autonomous engineering workflow integrating with Git and GitHub CLI (gh)",
+      "downloadUrl": "https://github.com/onsynk/gitsynk/archive/refs/heads/main.zip",
+      "files": [
+        ".gitignore",
+        "README.md",
+        "SKILL.md",
+        "onsynk.json",
+        "references/plan_format.md",
+        "references/stack_matrix.md",
+        "scripts/create_plan.sh",
+        "scripts/create_task.sh",
+        "scripts/detect_quality_tools.sh",
+        "scripts/fetch_task.sh",
+        "scripts/open_pr.sh",
+        "scripts/parse_plan.sh"
+      ],
+      "name": "onsynk/gitsynk",
+      "installedAt": "2026-10-28T13:06:16.100Z",
+      "updatedAt": "2026-10-28T13:06:16.100Z"
+    }
+  }
+}
