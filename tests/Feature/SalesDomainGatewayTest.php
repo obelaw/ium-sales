@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Obelaw\Ium\Sales\Models\Customer;
 use Obelaw\Ium\Sales\Models\SalesChannel;
 use Obelaw\Ium\Sales\Models\SalesOrder;
 use Obelaw\Ium\Sales\SalesDomain;
@@ -19,6 +20,7 @@ it('resolves all domain services from sales domain gateway', function () {
     expect($sales->fulfillment())->toBeInstanceOf(\Obelaw\Ium\Sales\Services\FulfillmentService::class);
     expect($sales->rmas())->toBeInstanceOf(\Obelaw\Ium\Sales\Services\RmaService::class);
     expect($sales->channels())->toBeInstanceOf(\Obelaw\Ium\Sales\Services\ChannelService::class);
+    expect($sales->customers())->toBeInstanceOf(\Obelaw\Ium\Sales\Services\CustomerService::class);
     expect($sales->pricing())->toBeInstanceOf(\Obelaw\Ium\Sales\Services\PricingEngineService::class);
     expect($sales->payments())->toBeInstanceOf(\Obelaw\Ium\Sales\Services\PaymentService::class);
     expect($sales->audit())->toBeInstanceOf(\Obelaw\Ium\Sales\Services\AuditService::class);
@@ -28,6 +30,9 @@ it('resolves all domain services from sales domain gateway', function () {
 it('applies the ium_sales_ physical table prefix correctly', function () {
     $channel = new SalesChannel();
     expect($channel->getTable())->toBe('ium_sales_channels');
+
+    $customer = new Customer();
+    expect($customer->getTable())->toBe('ium_sales_customers');
 
     $order = new SalesOrder();
     expect($order->getTable())->toBe('ium_sales_orders');

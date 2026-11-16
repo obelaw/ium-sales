@@ -9,6 +9,7 @@ use Obelaw\Ium\Engine\ObelawConfigManager;
 use Obelaw\Ium\Sales\Services\AclService;
 use Obelaw\Ium\Sales\Services\AuditService;
 use Obelaw\Ium\Sales\Services\ChannelService;
+use Obelaw\Ium\Sales\Services\CustomerService;
 use Obelaw\Ium\Sales\Services\FulfillmentService;
 use Obelaw\Ium\Sales\Services\OrderService;
 use Obelaw\Ium\Sales\Services\PaymentService;
@@ -73,6 +74,14 @@ final class SalesDomain extends Domain
     public function channels(): ChannelService
     {
         return $this->getManager()->channels();
+    }
+
+    /**
+     * Customer accounts, contacts, and commercial profiles directory service.
+     */
+    public function customers(): CustomerService
+    {
+        return $this->getManager()->customers();
     }
 
     /**

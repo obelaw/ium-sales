@@ -7,6 +7,7 @@ namespace Obelaw\Ium\Sales;
 use Obelaw\Ium\Sales\Services\AclService;
 use Obelaw\Ium\Sales\Services\AuditService;
 use Obelaw\Ium\Sales\Services\ChannelService;
+use Obelaw\Ium\Sales\Services\CustomerService;
 use Obelaw\Ium\Sales\Services\FulfillmentService;
 use Obelaw\Ium\Sales\Services\OrderService;
 use Obelaw\Ium\Sales\Services\PaymentService;
@@ -42,6 +43,11 @@ final class SalesManager
     public function channels(): ChannelService
     {
         return app(ChannelService::class);
+    }
+
+    public function customers(): CustomerService
+    {
+        return app(CustomerService::class);
     }
 
     public function pricing(): PricingEngineService
