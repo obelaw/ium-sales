@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Obelaw\Ium\Sales;
 
+use Illuminate\Support\Facades\Artisan;
 use Obelaw\Ium\Abstracts\Domain;
 use Obelaw\Ium\Engine\ObelawConfigManager;
+use Obelaw\Ium\Sales\Providers\ObelawSalesServiceProvider;
 use Obelaw\Ium\Sales\Services\AclService;
 use Obelaw\Ium\Sales\Services\AuditService;
 use Obelaw\Ium\Sales\Services\ChannelService;
@@ -25,7 +27,7 @@ use Obelaw\Ium\Sales\Services\RmaService;
 final class SalesDomain extends Domain
 {
     public function __construct(
-        ObelawConfigManager $config,
+        private readonly ObelawConfigManager $config,
         private readonly ?SalesManager $manager = null
     ) {
         parent::__construct($config);
@@ -114,5 +116,82 @@ final class SalesDomain extends Domain
     public function acl(): AclService
     {
         return $this->getManager()->acl();
+    }
+
+    /**
+     * Enable or disable automatic migration registration.
+     */
+    public function autoMigrate(bool $auto = true): self
+    {
+        if ($this->config !== null) {
+            $this->config->set('sales.migrations.auto_migrate', $auto);
+        }
+        ObelawSalesServiceProvider::autoMigrate($auto);
+
+        return $this;
+    }
+
+    /**
+     * Disable automatic migration registration.
+     */
+    public function ignoreMigrations(): self
+    {
+        return $this->autoMigrate(false);
+    }
+
+    /**
+     * Set a custom migrations directory path.
+     */
+    public function setMigrationPath(?string $path): self
+    {
+        if ($this->config !== null) {
+            $this->config->set('sales.migrations.path', $path);
+        }
+        ObelawSalesServiceProvider::setMigrationPath($path);
+
+        return $this;
+    }
+
+    /**
+     * Get the active migrations directory path.
+     */
+    public function getMigrationPath(): string
+    {
+        return ObelawSalesServiceProvider::getMigrationPath();
+    }
+
+    /**
+     * Determine whether auto-migration is enabled.
+     */
+    public function shouldAutoMigrate(): bool
+    {
+        return ObelawSalesServiceProvider::shouldAutoMigrate();
+    }
+
+    /**
+     * Get the package default migrations path.
+     */
+    public function defaultMigrationPath(): string
+    {
+        return ObelawSalesServiceProvider::defaultMigrationPath();
+    }
+
+    /**
+     * Execute domain migrations directly.
+     *
+     * @param string|null $path Custom migrations path override
+     * @param array<string, mixed> $options Additional Artisan migrate options
+     */
+    public function migrate(?string $path = null, array $options = []): int
+    {
+        $migrationPath = $path ?? $this->getMigrationPath();
+        $resolvedPath = realpath($migrationPath) ?: $migrationPath;
+
+        $params = array_merge([
+            '--path' => $resolvedPath,
+            '--realpath' => true,
+        ], $options);
+
+        return Artisan::call('migrate', $params);
     }
 }

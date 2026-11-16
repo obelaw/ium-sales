@@ -5,6 +5,20 @@ declare(strict_types=1);
 return [
     /*
     |--------------------------------------------------------------------------
+    | Database Migrations
+    |--------------------------------------------------------------------------
+    |
+    | Configure whether domain migrations are automatically registered and loaded
+    | into Laravel's migrator, and optionally specify a custom migration path.
+    |
+    */
+    'migrations' => [
+        'auto_migrate' => (bool) env('IUM_SALES_AUTO_MIGRATE', true),
+        'path' => env('IUM_SALES_MIGRATIONS_PATH', null),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Sales & Order Management Domain Configuration
     |--------------------------------------------------------------------------
     */

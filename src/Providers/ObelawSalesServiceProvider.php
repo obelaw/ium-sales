@@ -10,6 +10,7 @@ use Illuminate\Support\ServiceProvider;
 use Obelaw\Ium\Engine\ObelawConfigManager;
 use Obelaw\Ium\Facades\Ium;
 use Obelaw\Ium\ObelawiumManager;
+use Obelaw\Ium\Sales\Console\Commands\MigrateSalesCommand;
 use Obelaw\Ium\Sales\Events\OrderCancelled;
 use Obelaw\Ium\Sales\Events\OrderPaymentRecorded;
 use Obelaw\Ium\Sales\Events\RmaCreditApproved;
@@ -33,6 +34,102 @@ use Obelaw\Ium\Sales\Services\RmaService;
 
 final class ObelawSalesServiceProvider extends ServiceProvider
 {
+    /**
+     * Runtime override for automatic migration loading.
+     */
+    public static ?bool $autoMigrate = null;
+
+    /**
+     * Runtime override for custom migration path.
+     */
+    public static ?string $customMigrationPath = null;
+
+    /**
+     * Configure whether migrations should be automatically registered.
+     */
+    public static function autoMigrate(bool $autoMigrate = true): void
+    {
+        static::$autoMigrate = $autoMigrate;
+    }
+
+    /**
+     * Disable automatic migration registration.
+     */
+    public static function ignoreMigrations(): void
+    {
+        static::$autoMigrate = false;
+    }
+
+    /**
+     * Set a custom migrations directory path.
+     */
+    public static function setMigrationPath(?string $path): void
+    {
+        static::$customMigrationPath = $path;
+    }
+
+    /**
+     * Get the default migrations path for the package.
+     */
+    public static function defaultMigrationPath(): string
+    {
+        return realpath(__DIR__ . '/../../database/migrations') ?: (__DIR__ . '/../../database/migrations');
+    }
+
+    /**
+     * Resolve the active migration path.
+     */
+    public static function getMigrationPath(): string
+    {
+        if (static::$customMigrationPath !== null && static::$customMigrationPath !== '') {
+            return static::$customMigrationPath;
+        }
+
+        $configPath = config('ium.sales.migrations.path') ?? config('ium.sales.migration_path');
+        if (! empty($configPath) && is_string($configPath)) {
+            return $configPath;
+        }
+
+        if (class_exists(ObelawConfigManager::class)) {
+            $iumPath = ObelawConfigManager::getInstance()->get('sales.migrations.path')
+                ?? ObelawConfigManager::getInstance()->get('sales.migration_path');
+            if (! empty($iumPath) && is_string($iumPath)) {
+                return $iumPath;
+            }
+        }
+
+        return static::defaultMigrationPath();
+    }
+
+    /**
+     * Determine if migrations should be loaded automatically.
+     */
+    public static function shouldAutoMigrate(): bool
+    {
+        if (static::$autoMigrate !== null) {
+            return static::$autoMigrate;
+        }
+
+        $configVal = config('ium.sales.migrations.auto_migrate') ?? config('ium.sales.auto_migrate');
+        if ($configVal !== null) {
+            return (bool) $configVal;
+        }
+
+        if (class_exists(ObelawConfigManager::class)) {
+            $iumAutoMigrate = ObelawConfigManager::getInstance()->get('sales.migrations.auto_migrate');
+            if ($iumAutoMigrate !== null) {
+                return (bool) $iumAutoMigrate;
+            }
+
+            $globalConfig = ObelawConfigManager::getInstance()->get('obelawium.db.migrations');
+            if ($globalConfig !== null) {
+                return (bool) $globalConfig;
+            }
+        }
+
+        return true;
+    }
+
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__ . '/../../config/sales.php', 'ium.sales');
@@ -54,13 +151,20 @@ final class ObelawSalesServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        if (ObelawConfigManager::getInstance()->get('obelawium.db.migrations', true)) {
-            $this->loadMigrationsFrom(__DIR__ . '/../../database/migrations');
+        if (static::shouldAutoMigrate()) {
+            $migrationPath = static::getMigrationPath();
+            if (is_dir($migrationPath)) {
+                $this->loadMigrationsFrom($migrationPath);
+            }
         }
 
         if ($this->app->runningInConsole()) {
+            $this->commands([
+                MigrateSalesCommand::class,
+            ]);
+
             $this->publishes([
-                __DIR__ . '/../../database/migrations' => database_path('migrations'),
+                static::defaultMigrationPath() => database_path('migrations'),
             ], 'ium-sales-migrations');
 
             $this->publishes([
