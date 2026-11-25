@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Obelaw\Ium\Sales\Base\ModelBase;
 use Obelaw\Ium\Sales\Enums\OrderStatus;
 use Obelaw\Ium\Sales\Exceptions\OrderPriceLockedException;
+use Obelaw\Ium\Support\Money;
 
 /**
  * Sales Order Line Model.
@@ -129,21 +130,26 @@ class SalesOrderLine extends ModelBase
 
     public function getTotalAmountMinorAttribute(): int
     {
-        return (int) round(((float) $this->total_amount) * 100);
+        return Money::fromMajor((float) $this->total_amount, $this->resolveCurrency())->amount;
     }
 
     public function getUnitPriceMinorAttribute(): int
     {
-        return (int) round(((float) $this->unit_price) * 100);
+        return Money::fromMajor((float) $this->unit_price, $this->resolveCurrency())->amount;
     }
 
     public function getDiscountAmountMinorAttribute(): int
     {
-        return (int) round(((float) $this->discount_amount) * 100);
+        return Money::fromMajor((float) $this->discount_amount, $this->resolveCurrency())->amount;
     }
 
     public function getTaxAmountMinorAttribute(): int
     {
-        return (int) round(((float) $this->tax_amount) * 100);
+        return Money::fromMajor((float) $this->tax_amount, $this->resolveCurrency())->amount;
+    }
+
+    private function resolveCurrency(): string
+    {
+        return $this->order?->currency ?: 'USD';
     }
 }

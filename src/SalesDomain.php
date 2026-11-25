@@ -27,7 +27,7 @@ use Obelaw\Ium\Sales\Services\RmaService;
 final class SalesDomain extends Domain
 {
     public function __construct(
-        private readonly ObelawConfigManager $config,
+        ObelawConfigManager $config,
         private readonly ?SalesManager $manager = null
     ) {
         parent::__construct($config);

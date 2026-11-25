@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Obelaw\Ium\Sales\Services;
 
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
+use Obelaw\Ium\Facades\Ium;
 use Obelaw\Ium\Sales\Data\CreateQuotationDto;
 use Obelaw\Ium\Sales\Data\CreateSalesOrderDto;
 use Obelaw\Ium\Sales\Data\SalesOrderLineDto;
@@ -33,7 +33,7 @@ final class QuotationService
      */
     public function create(CreateQuotationDto $dto): Quotation
     {
-        return DB::transaction(function () use ($dto): Quotation {
+        return Ium::connection()->transaction(function () use ($dto): Quotation {
             $code = $dto->code ?? $this->generateQuotationCode();
 
             $lineInputs = array_map(fn($line) => [
@@ -203,7 +203,7 @@ final class QuotationService
             throw InvalidOrderStateTransitionException::transition('Quotation', $quotation->status->value, 'ConvertedToOrder');
         }
 
-        return DB::transaction(function () use ($quotation): SalesOrder {
+        return Ium::connection()->transaction(function () use ($quotation): SalesOrder {
             $quotation->loadMissing('lines');
 
             $orderLines = [];

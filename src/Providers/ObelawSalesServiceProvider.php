@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Obelaw\Ium\Engine\ObelawConfigManager;
 use Obelaw\Ium\Facades\Ium;
+use Obelaw\Ium\Modules\Module;
+use Obelaw\Ium\Modules\ModuleScope;
 use Obelaw\Ium\ObelawiumManager;
 use Obelaw\Ium\Sales\Console\Commands\MigrateSalesCommand;
 use Obelaw\Ium\Sales\Events\OrderCancelled;
@@ -25,6 +27,7 @@ use Obelaw\Ium\Sales\SalesManager;
 use Obelaw\Ium\Sales\Services\AclService;
 use Obelaw\Ium\Sales\Services\AuditService;
 use Obelaw\Ium\Sales\Services\ChannelService;
+use Obelaw\Ium\Sales\Services\CustomerService;
 use Obelaw\Ium\Sales\Services\FulfillmentService;
 use Obelaw\Ium\Sales\Services\OrderService;
 use Obelaw\Ium\Sales\Services\PaymentService;
@@ -110,6 +113,10 @@ final class ObelawSalesServiceProvider extends ServiceProvider
             return static::$autoMigrate;
         }
 
+        if (config('ium.migrations.auto_load') === false) {
+            return false;
+        }
+
         $configVal = config('ium.sales.migrations.auto_migrate') ?? config('ium.sales.auto_migrate');
         if ($configVal !== null) {
             return (bool) $configVal;
@@ -145,8 +152,14 @@ final class ObelawSalesServiceProvider extends ServiceProvider
 
         $this->bindServices();
 
-        // Register domain with central Obelawium gateway
-        ObelawiumManager::getInstance()->registerDomain('sales', SalesDomain::class);
+        Ium::registerModule(Module::make(
+            name: 'sales',
+            domain: SalesDomain::class,
+            scope: ModuleScope::Tenant,
+            migrationPaths: [static::defaultMigrationPath()],
+            version: '1.0.0',
+            description: 'Sales & Order Management System (OMS) domain module for Obelawium ERP',
+        ));
     }
 
     public function boot(): void
@@ -172,7 +185,7 @@ final class ObelawSalesServiceProvider extends ServiceProvider
             ], 'ium-sales-config');
         }
 
-        AboutCommand::add('Obelawium', static fn() => ['Obelawium Sales' => '0.1.0']);
+        AboutCommand::add('Obelawium', static fn() => ['Obelawium Sales' => '1.0.0']);
 
         $this->registerEventSubscribers();
     }
@@ -196,6 +209,7 @@ final class ObelawSalesServiceProvider extends ServiceProvider
             FulfillmentService::class,
             RmaService::class,
             ChannelService::class,
+            CustomerService::class,
             AclService::class,
         ];
 

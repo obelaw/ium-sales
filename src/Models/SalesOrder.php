@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Obelaw\Ium\Sales\Base\ModelBase;
 use Obelaw\Ium\Sales\Enums\OrderStatus;
 use Obelaw\Ium\Sales\Exceptions\OrderPriceLockedException;
+use Obelaw\Ium\Support\Money;
 
 /**
  * Sales Order (SO) Aggregate Root.
@@ -148,26 +149,26 @@ class SalesOrder extends ModelBase
 
     public function getGrandTotalMinorAttribute(): int
     {
-        return (int) round(((float) $this->grand_total) * 100);
+        return Money::fromMajor((float) $this->grand_total, $this->currency ?: 'USD')->amount;
     }
 
     public function getSubtotalMinorAttribute(): int
     {
-        return (int) round(((float) $this->subtotal) * 100);
+        return Money::fromMajor((float) $this->subtotal, $this->currency ?: 'USD')->amount;
     }
 
     public function getDiscountTotalMinorAttribute(): int
     {
-        return (int) round(((float) $this->discount_total) * 100);
+        return Money::fromMajor((float) $this->discount_total, $this->currency ?: 'USD')->amount;
     }
 
     public function getTaxTotalMinorAttribute(): int
     {
-        return (int) round(((float) $this->tax_total) * 100);
+        return Money::fromMajor((float) $this->tax_total, $this->currency ?: 'USD')->amount;
     }
 
     public function getShippingTotalMinorAttribute(): int
     {
-        return (int) round(((float) $this->shipping_total) * 100);
+        return Money::fromMajor((float) $this->shipping_total, $this->currency ?: 'USD')->amount;
     }
 }

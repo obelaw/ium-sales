@@ -15,6 +15,7 @@ enum OrderStatus: string
     case Allocated = 'allocated';
     case Released = 'released';
     case PartiallyShipped = 'partially_shipped';
+    case Shipped = 'shipped';
     case Completed = 'completed';
     case Cancelled = 'cancelled';
     case CancellationPending = 'cancellation_pending';

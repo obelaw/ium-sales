@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Obelaw\Ium\Sales\Services;
 
-use Illuminate\Support\Facades\DB;
+use Obelaw\Ium\Facades\Ium;
 use Obelaw\Ium\Sales\Data\CreateSalesOrderDto;
 use Obelaw\Ium\Sales\Data\IngestOrderDto;
 use Obelaw\Ium\Sales\Enums\OrderStatus;
@@ -31,7 +31,7 @@ final class OrderService
      */
     public function create(CreateSalesOrderDto $dto): SalesOrder
     {
-        return DB::transaction(function () use ($dto): SalesOrder {
+        return Ium::connection()->transaction(function () use ($dto): SalesOrder {
             $orderNumber = $dto->orderNumber ?? $this->generateOrderNumber();
 
             $lineInputs = array_map(fn($line) => [
@@ -191,7 +191,7 @@ final class OrderService
             throw CannotCancelReleasedOrderException::forOrder($order->order_number, $order->status->value);
         }
 
-        return DB::transaction(function () use ($order, $reason): SalesOrder {
+        return Ium::connection()->transaction(function () use ($order, $reason): SalesOrder {
             $before = ['status' => $order->status->value];
 
             $order->status = OrderStatus::Cancelled;
@@ -219,7 +219,7 @@ final class OrderService
                 reasonCode: $reason
             );
 
-            event(new OrderCancelled($order, $reason));
+            Ium::connection()->afterCommit(static fn () => event(new OrderCancelled($order, $reason)));
 
             return $order;
         });

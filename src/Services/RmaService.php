@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Obelaw\Ium\Sales\Services;
 
-use Illuminate\Support\Facades\DB;
+use Obelaw\Ium\Facades\Ium;
 use Obelaw\Ium\Sales\Data\CreateRmaDto;
 use Obelaw\Ium\Sales\Data\ReceiveRmaGoodsDto;
 use Obelaw\Ium\Sales\Enums\RmaDisposition;
@@ -23,33 +23,69 @@ use Obelaw\Ium\Sales\Models\SalesOrderLine;
  */
 final class RmaService
 {
+    private const EPSILON = 0.00001;
+
     public function __construct(
         private readonly AuditService $audit,
     ) {}
 
     /**
      * Submit a customer return merchandise request.
+     *
+     * Accounts for quantities already reserved by open (in-flight) RMAs so concurrent
+     * or sequential requests cannot double-return the same order line.
      */
     public function request(CreateRmaDto $dto): ReturnMerchandiseAuthorization
     {
-        /** @var SalesOrder $order */
-        $order = SalesOrder::with('lines')->findOrFail($dto->salesOrderId);
-
-        return DB::transaction(function () use ($order, $dto): ReturnMerchandiseAuthorization {
+        return Ium::connection()->transaction(function () use ($dto): ReturnMerchandiseAuthorization {
+            /** @var SalesOrder $order */
+            $order = SalesOrder::where('id', $dto->salesOrderId)->lockForUpdate()->firstOrFail();
+            $order->load('lines');
             $linesMap = $order->lines->keyBy('id');
 
-            // Validate returnable quantities
+            $openStatuses = [
+                RmaStatus::Draft->value,
+                RmaStatus::PendingAuthorization->value,
+                RmaStatus::Authorized->value,
+                RmaStatus::Received->value,
+            ];
+
+            /** @var array<int, float> $openRequestedByLine */
+            $openRequestedByLine = RmaLine::query()
+                ->whereIn('sales_order_line_id', $linesMap->keys()->all())
+                ->whereHas('rma', static function ($query) use ($openStatuses): void {
+                    $query->whereIn('status', $openStatuses);
+                })
+                ->selectRaw('sales_order_line_id, SUM(quantity_requested) as total_requested')
+                ->groupBy('sales_order_line_id')
+                ->pluck('total_requested', 'sales_order_line_id')
+                ->map(static fn (mixed $v): float => (float) $v)
+                ->all();
+
+            /** @var array<int, float> $cumulativeInRequest */
+            $cumulativeInRequest = [];
+
+            // Validate returnable quantities against shipped - returned - open RMAs
             foreach ($dto->lines as $lineDto) {
                 /** @var SalesOrderLine|null $orderLine */
                 $orderLine = $linesMap->get($lineDto->salesOrderLineId);
-                if (!$orderLine) {
+                if (! $orderLine) {
                     throw new \InvalidArgumentException("Sales order line [{$lineDto->salesOrderLineId}] not found on order [{$order->order_number}].");
                 }
 
-                $maxReturnable = $orderLine->returnableQuantity();
-                if ($lineDto->quantityRequested > $maxReturnable) {
+                if ($lineDto->quantityRequested <= 0.0) {
+                    throw InvalidRmaQuantityException::forLine($orderLine->sku, $lineDto->quantityRequested, $orderLine->returnableQuantity());
+                }
+
+                $openQty = $openRequestedByLine[$orderLine->id] ?? 0.0;
+                $alreadyInBatch = $cumulativeInRequest[$orderLine->id] ?? 0.0;
+                $maxReturnable = max(0.0, $orderLine->returnableQuantity() - $openQty - $alreadyInBatch);
+
+                if ($lineDto->quantityRequested > $maxReturnable + self::EPSILON) {
                     throw InvalidRmaQuantityException::forLine($orderLine->sku, $lineDto->quantityRequested, $maxReturnable);
                 }
+
+                $cumulativeInRequest[$orderLine->id] = $alreadyInBatch + $lineDto->quantityRequested;
             }
 
             /** @var ReturnMerchandiseAuthorization $rma */
@@ -68,8 +104,7 @@ final class RmaService
             foreach ($dto->lines as $lineDto) {
                 /** @var SalesOrderLine $orderLine */
                 $orderLine = $linesMap->get($lineDto->salesOrderLineId);
-                $unitNetPrice = (float) $orderLine->unit_price - ((float) $orderLine->discount_amount / (float) $orderLine->quantity);
-                $estimatedRefund = round($unitNetPrice * $lineDto->quantityRequested, 4);
+                $estimatedRefund = $this->calculateProportionalRefund($orderLine, $lineDto->quantityRequested);
 
                 RmaLine::create([
                     'rma_id' => $rma->id,
@@ -104,25 +139,30 @@ final class RmaService
             throw InvalidOrderStateTransitionException::transition('RMA', $rma->status->value, RmaStatus::Authorized->value);
         }
 
-        $before = ['status' => $rma->status->value];
-        $rma->status = RmaStatus::Authorized;
-        $rma->authorized_at = now();
-        $rma->save();
+        return Ium::connection()->transaction(function () use ($rma): ReturnMerchandiseAuthorization {
+            $before = ['status' => $rma->status->value];
+            $rma->status = RmaStatus::Authorized;
+            $rma->authorized_at = now();
+            $rma->save();
 
-        $this->audit->log(
-            auditable: $rma,
-            action: 'rma_authorized',
-            before: $before,
-            after: ['status' => RmaStatus::Authorized->value, 'authorized_at' => (string) $rma->authorized_at]
-        );
+            $this->audit->log(
+                auditable: $rma,
+                action: 'rma_authorized',
+                before: $before,
+                after: ['status' => RmaStatus::Authorized->value, 'authorized_at' => (string) $rma->authorized_at]
+            );
 
-        event(new ReturnAuthorized($rma));
+            Ium::connection()->afterCommit(static fn () => event(new ReturnAuthorized($rma)));
 
-        return $rma;
+            return $rma;
+        });
     }
 
     /**
      * Confirm physical receipt and inspection of returned items.
+     *
+     * Enforces 0 <= quantity_received <= quantity_requested and recalculates
+     * line refund_amount proportionally from actual received quantity (including proportional tax).
      */
     public function receiveGoods(ReturnMerchandiseAuthorization $rma, ReceiveRmaGoodsDto $dto): ReturnMerchandiseAuthorization
     {
@@ -130,39 +170,66 @@ final class RmaService
             throw InvalidOrderStateTransitionException::transition('RMA', $rma->status->value, RmaStatus::Received->value);
         }
 
-        return DB::transaction(function () use ($rma, $dto): ReturnMerchandiseAuthorization {
-            $rma->loadMissing('lines');
-            $rmaLines = $rma->lines->keyBy('id');
+        return Ium::connection()->transaction(function () use ($rma, $dto): ReturnMerchandiseAuthorization {
+            /** @var ReturnMerchandiseAuthorization $locked */
+            $locked = ReturnMerchandiseAuthorization::where('id', $rma->id)->lockForUpdate()->firstOrFail();
+
+            if ($locked->status !== RmaStatus::Authorized) {
+                throw InvalidOrderStateTransitionException::transition('RMA', $locked->status->value, RmaStatus::Received->value);
+            }
+
+            $locked->load('lines.orderLine');
+            $rmaLines = $locked->lines->keyBy('id');
 
             foreach ($dto->items as $item) {
                 $lineId = (int) $item['rma_line_id'];
                 /** @var RmaLine|null $rmaLine */
                 $rmaLine = $rmaLines->get($lineId);
-                if ($rmaLine) {
-                    $disposition = isset($item['disposition'])
-                        ? RmaDisposition::tryFrom((string) $item['disposition']) ?? RmaDisposition::Restock
-                        : RmaDisposition::Restock;
-
-                    $rmaLine->update([
-                        'quantity_received' => (float) $item['quantity_received'],
-                        'quantity_approved' => (float) $item['quantity_received'],
-                        'disposition' => $disposition,
-                        'notes' => $item['notes'] ?? $rmaLine->notes,
-                    ]);
+                if (! $rmaLine) {
+                    continue;
                 }
+
+                $qtyReceived = (float) $item['quantity_received'];
+                $qtyRequested = (float) $rmaLine->quantity_requested;
+
+                if ($qtyReceived < 0.0 || $qtyReceived > $qtyRequested + self::EPSILON) {
+                    throw InvalidRmaQuantityException::forLine(
+                        $rmaLine->orderLine?->sku ?? ('RMA-LINE-' . $rmaLine->id),
+                        $qtyReceived,
+                        $qtyRequested
+                    );
+                }
+
+                $disposition = isset($item['disposition'])
+                    ? RmaDisposition::tryFrom((string) $item['disposition']) ?? RmaDisposition::Restock
+                    : RmaDisposition::Restock;
+
+                $recalculatedRefund = $rmaLine->orderLine
+                    ? $this->calculateProportionalRefund($rmaLine->orderLine, $qtyReceived)
+                    : ($qtyRequested > 0.0
+                        ? round(((float) $rmaLine->refund_amount / $qtyRequested) * $qtyReceived, 4)
+                        : 0.0);
+
+                $rmaLine->update([
+                    'quantity_received' => $qtyReceived,
+                    'quantity_approved' => $qtyReceived,
+                    'disposition' => $disposition,
+                    'refund_amount' => $recalculatedRefund,
+                    'notes' => $item['notes'] ?? $rmaLine->notes,
+                ]);
             }
 
-            $rma->status = RmaStatus::Received;
-            $rma->received_at = now();
-            $rma->save();
+            $locked->status = RmaStatus::Received;
+            $locked->received_at = now();
+            $locked->save();
 
             $this->audit->log(
-                auditable: $rma,
+                auditable: $locked,
                 action: 'rma_goods_received',
                 after: ['status' => RmaStatus::Received->value]
             );
 
-            return $rma->load('lines');
+            return $locked->load('lines.orderLine');
         });
     }
 
@@ -175,10 +242,17 @@ final class RmaService
             throw InvalidOrderStateTransitionException::transition('RMA', $rma->status->value, RmaStatus::ApprovedForCredit->value);
         }
 
-        return DB::transaction(function () use ($rma): ReturnMerchandiseAuthorization {
-            $rma->loadMissing(['lines.orderLine', 'order']);
+        return Ium::connection()->transaction(function () use ($rma): ReturnMerchandiseAuthorization {
+            /** @var ReturnMerchandiseAuthorization $locked */
+            $locked = ReturnMerchandiseAuthorization::where('id', $rma->id)->lockForUpdate()->firstOrFail();
 
-            foreach ($rma->lines as $line) {
+            if ($locked->status !== RmaStatus::Received) {
+                throw InvalidOrderStateTransitionException::transition('RMA', $locked->status->value, RmaStatus::ApprovedForCredit->value);
+            }
+
+            $locked->load(['lines.orderLine', 'order']);
+
+            foreach ($locked->lines as $line) {
                 $orderLine = $line->orderLine;
                 if ($orderLine) {
                     $newReturned = (float) $orderLine->returned_quantity + (float) $line->quantity_approved;
@@ -188,19 +262,19 @@ final class RmaService
                 }
             }
 
-            $rma->status = RmaStatus::ApprovedForCredit;
-            $rma->save();
+            $locked->status = RmaStatus::ApprovedForCredit;
+            $locked->save();
 
             $this->audit->log(
-                auditable: $rma,
+                auditable: $locked,
                 action: 'rma_approved_for_credit',
                 after: ['status' => RmaStatus::ApprovedForCredit->value]
             );
 
-            $totalRefund = (float) $rma->lines->sum('refund_amount');
-            event(new RmaCreditApproved($rma, $totalRefund));
+            $totalRefund = round((float) $locked->lines->sum('refund_amount'), 4);
+            Ium::connection()->afterCommit(static fn () => event(new RmaCreditApproved($locked, $totalRefund)));
 
-            return $rma;
+            return $locked;
         });
     }
 
@@ -242,6 +316,27 @@ final class RmaService
         );
 
         return $rma;
+    }
+
+    /**
+     * Calculate proportional line refund including discount and tax for a given quantity.
+     */
+    private function calculateProportionalRefund(SalesOrderLine $orderLine, float $quantity): float
+    {
+        if ($quantity <= 0.0) {
+            return 0.0;
+        }
+
+        $lineQty = (float) $orderLine->quantity;
+        if ($lineQty > 0.0 && (float) $orderLine->total_amount > 0.0) {
+            return round(((float) $orderLine->total_amount / $lineQty) * $quantity, 4);
+        }
+
+        $unitNetPrice = $lineQty > 0.0
+            ? (float) $orderLine->unit_price - ((float) $orderLine->discount_amount / $lineQty)
+            : (float) $orderLine->unit_price;
+
+        return round($unitNetPrice * $quantity, 4);
     }
 
     private function generateRmaNumber(): string

@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Obelaw\Ium\Sales\Services;
 
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Facades\DB;
+use Obelaw\Ium\Facades\Ium;
 use Obelaw\Ium\Sales\Data\RecordOrderPaymentDto;
 use Obelaw\Ium\Sales\Events\OrderInvoiced;
 use Obelaw\Ium\Sales\Events\OrderPaymentRecorded;
 use Obelaw\Ium\Sales\Models\SalesOrder;
 use Obelaw\Ium\Sales\Models\SalesOrderPayment;
+use Obelaw\Ium\Support\Money;
 
 /**
  * Commercial Invoicing & Payment Collection Lifecycle Service.
@@ -26,13 +27,13 @@ final class PaymentService
      */
     public function recordPayment(RecordOrderPaymentDto $dto): SalesOrderPayment
     {
-        return DB::transaction(function () use ($dto): SalesOrderPayment {
+        return Ium::connection()->transaction(function () use ($dto): SalesOrderPayment {
             /** @var SalesOrder $order */
             $order = SalesOrder::where('id', $dto->salesOrderId)->lockForUpdate()->firstOrFail();
 
-            $amountMinor = (int) round($dto->amount * 100);
             $paymentReference = $dto->paymentReference ?? $this->generatePaymentReference($order);
-            $currency = $dto->currency ?? $order->currency;
+            $currency = $dto->currency ?: ($order->currency ?: 'USD');
+            $amountMinor = Money::fromMajor($dto->amount, $currency)->amount;
             $paidAt = $dto->paidAt ? \Illuminate\Support\Carbon::parse($dto->paidAt) : now();
 
             /** @var SalesOrderPayment $payment */
@@ -77,7 +78,7 @@ final class PaymentService
                 ]
             );
 
-            event(new OrderPaymentRecorded($order, $payment));
+            Ium::connection()->afterCommit(static fn () => event(new OrderPaymentRecorded($order, $payment)));
 
             return $payment;
         });
@@ -88,7 +89,7 @@ final class PaymentService
      */
     public function issueInvoice(SalesOrder $order): string
     {
-        return DB::transaction(function () use ($order): string {
+        return Ium::connection()->transaction(function () use ($order): string {
             $order = SalesOrder::where('id', $order->id)->lockForUpdate()->firstOrFail();
 
             $metadata = $order->metadata ?? [];
@@ -110,7 +111,7 @@ final class PaymentService
                 after: ['invoice_number' => $invoiceNumber]
             );
 
-            event(new OrderInvoiced($order, $invoiceNumber));
+            Ium::connection()->afterCommit(static fn () => event(new OrderInvoiced($order, $invoiceNumber)));
 
             return $invoiceNumber;
         });

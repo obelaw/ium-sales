@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Obelaw\Ium\Sales\Services;
 
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
+use Obelaw\Ium\Facades\Ium;
 use Obelaw\Ium\Sales\Data\MarkShippedDto;
 use Obelaw\Ium\Sales\Data\SplitOrderDto;
 use Obelaw\Ium\Sales\Enums\FulfillmentBatchStatus;
@@ -42,7 +42,7 @@ final class FulfillmentService
             throw InvalidOrderStateTransitionException::transition('SalesOrder', $order->status->value, OrderStatus::Allocated->value);
         }
 
-        return DB::transaction(function () use ($order, $defaultSourcingNode, $availableAtp): SalesOrder {
+        return Ium::connection()->transaction(function () use ($order, $defaultSourcingNode, $availableAtp): SalesOrder {
             // Pessimistic lock on parent order to prevent race conditions during concurrent allocations
             SalesOrder::where('id', $order->id)->lockForUpdate()->first();
 
@@ -109,7 +109,7 @@ final class FulfillmentService
     {
         $order->loadMissing('lines', 'batches');
 
-        return DB::transaction(function () use ($order, $dto): Collection {
+        return Ium::connection()->transaction(function () use ($order, $dto): Collection {
             // Clear existing unreleased batches if re-splitting
             foreach ($order->batches as $existingBatch) {
                 if ($existingBatch->status === FulfillmentBatchStatus::Allocated || $existingBatch->status === FulfillmentBatchStatus::Pending) {
@@ -155,7 +155,7 @@ final class FulfillmentService
                 after: ['batches_count' => $createdBatches->count()]
             );
 
-            event(new OrderSplitted($order, $createdBatches));
+            Ium::connection()->afterCommit(static fn () => event(new OrderSplitted($order, $createdBatches)));
 
             return $createdBatches;
         });
@@ -173,7 +173,7 @@ final class FulfillmentService
             throw InvalidOrderStateTransitionException::transition('FulfillmentBatch', $batch->status->value, FulfillmentBatchStatus::Released->value);
         }
 
-        return DB::transaction(function () use ($batch): FulfillmentBatch {
+        return Ium::connection()->transaction(function () use ($batch): FulfillmentBatch {
             $batch->status = FulfillmentBatchStatus::Released;
             $batch->save();
 
@@ -193,7 +193,7 @@ final class FulfillmentService
                 ]
             );
 
-            event(new FulfillmentBatchReleased($batch));
+            Ium::connection()->afterCommit(static fn () => event(new FulfillmentBatchReleased($batch)));
 
             return $batch;
         });
@@ -206,7 +206,7 @@ final class FulfillmentService
     {
         $batch->loadMissing(['lines.orderLine', 'order.lines', 'order.batches']);
 
-        return DB::transaction(function () use ($batch, $dto): FulfillmentBatch {
+        return Ium::connection()->transaction(function () use ($batch, $dto): FulfillmentBatch {
             $batch->status = FulfillmentBatchStatus::Shipped;
             $batch->carrier_code = $dto->carrierCode ?? $batch->carrier_code;
             $batch->tracking_number = $dto->trackingNumber ?? $batch->tracking_number;
@@ -231,7 +231,7 @@ final class FulfillmentService
                 $allBatches = $order->batches()->get();
                 $allShippedOrDelivered = $allBatches->every(fn(FulfillmentBatch $b) => in_array($b->status, [FulfillmentBatchStatus::Shipped, FulfillmentBatchStatus::Delivered], true));
 
-                $order->status = $allShippedOrDelivered ? OrderStatus::PartiallyShipped : OrderStatus::PartiallyShipped;
+                $order->status = $allShippedOrDelivered ? OrderStatus::Shipped : OrderStatus::PartiallyShipped;
                 $order->save();
             }
 
@@ -256,7 +256,7 @@ final class FulfillmentService
     {
         $batch->loadMissing(['order.batches']);
 
-        return DB::transaction(function () use ($batch): FulfillmentBatch {
+        return Ium::connection()->transaction(function () use ($batch): FulfillmentBatch {
             $batch->status = FulfillmentBatchStatus::Delivered;
             $batch->delivered_at = now();
             $batch->save();
