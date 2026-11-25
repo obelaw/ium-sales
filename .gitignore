@@ -1,6 +1,8 @@
-/vendor
-.agents
+/vendor/
 /composer.lock
-.phpunit.result.cache
-.phpunit.cache/
-composer.lock
+/composer.local.json
+/composer.local.lock
+/.phpunit.result.cache
+/.phpunit.cache/
+.DS_Store
+Thumbs.db
