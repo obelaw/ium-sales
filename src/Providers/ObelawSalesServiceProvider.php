@@ -188,6 +188,10 @@ final class ObelawSalesServiceProvider extends ServiceProvider
         AboutCommand::add('Obelawium', static fn() => ['Obelawium Sales' => '1.0.0']);
 
         $this->registerEventSubscribers();
+
+        if (class_exists(\Obelaw\Ium\Mcp\Facades\IumMcp::class)) {
+            \Obelaw\Ium\Mcp\Facades\IumMcp::registerToolset(\Obelaw\Ium\Sales\Mcp\SalesToolset::class);
+        }
     }
 
     private function registerEventSubscribers(): void
